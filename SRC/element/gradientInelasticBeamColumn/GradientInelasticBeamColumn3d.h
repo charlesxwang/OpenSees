@@ -26,11 +26,11 @@
 ** References:
 **
 ** Mohammad Salehi and Petros Sideris (2017)
-** ìRefined Gradient Inelastic Flexibility-Based Formulation for Members Subjected to Arbitrary Loadingî
+** ‚ÄúRefined Gradient Inelastic Flexibility-Based Formulation for Members Subjected to Arbitrary Loading‚Äù
 ** ASCE Journal of Engineering Mechanics, 143(9): 04017090
 **
 ** Petros Sideris and Mohammad Salehi (2016)
-** ìA Gradient Inelastic Flexibility-Based Frame Element Formulationî
+** ‚ÄúA Gradient Inelastic Flexibility-Based Frame Element Formulation‚Äù
 ** ASCE Journal of Engineering Mechanics, 142(7): 04016039
 */
 
@@ -56,7 +56,7 @@ public:
 	// Constructors
 	GradientInelasticBeamColumn3d();
 	GradientInelasticBeamColumn3d(int tag, int nodeI, int nodeJ,
-		int numSec, SectionForceDeformation **endSec1, SectionForceDeformation **sec, SectionForceDeformation **endSec2, double R1, double R2,
+		int numSec, SectionForceDeformation &endSec1, SectionForceDeformation &sec, SectionForceDeformation &endSec2, double R1, double R2,
 		BeamIntegration &BI, CrdTransf &CT, double LC,
 		double minTolerance = 1.0e-10, double maxTolerance = 1.0e-8, int maxNumIters = 50,
 		bool updateH = false,
@@ -98,7 +98,7 @@ public:
 	int getResponse(int responseID, Information &eleInfo);
 
 	// Method to Display Element
-	int	displaySelf(Renderer &theViewer, int displayMode, float fact);
+	int displaySelf(Renderer& theViewer, int displayMode, float fact, const char** displayModes = 0, int numModes = 0);
 
 	// Methods to Do Parallel Processing; base class: Channel
 	int sendSelf(int commitTag, Channel &theChannel);

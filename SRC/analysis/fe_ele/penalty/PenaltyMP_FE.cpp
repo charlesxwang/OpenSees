@@ -218,35 +218,35 @@ PenaltyMP_FE::getResidual(Integrator *theNewIntegrator)
 const Vector &
 PenaltyMP_FE::getTangForce(const Vector &disp, double fact)
 {
- opserr << "WARNING PenaltySP_FE::getTangForce() - not yet implemented\n";
+ opserr << "WARNING PenaltyMP_FE::getTangForce() - not yet implemented\n";
  return *resid;
 }
 
 const Vector &
 PenaltyMP_FE::getK_Force(const Vector &disp, double fact)
 {
- opserr << "WARNING PenaltySP_FE::getK_Force() - not yet implemented\n";
+ opserr << "WARNING PenaltyMP_FE::getK_Force() - not yet implemented\n";
  return *resid;
 }
 
 const Vector &
 PenaltyMP_FE::getKi_Force(const Vector &disp, double fact)
 {
- opserr << "WARNING PenaltySP_FE::getK_Force() - not yet implemented\n";
+ opserr << "WARNING PenaltyMP_FE::getK_Force() - not yet implemented\n";
  return *resid;
 }
 
 const Vector &
 PenaltyMP_FE::getC_Force(const Vector &disp, double fact)
 {
- opserr << "WARNING PenaltySP_FE::getC_Force() - not yet implemented\n";
+ opserr << "WARNING PenaltyMP_FE::getC_Force() - not yet implemented\n";
  return *resid;
 }
 
 const Vector &
 PenaltyMP_FE::getM_Force(const Vector &disp, double fact)
 {
-  // opserr << "WARNING PenaltySP_FE::getM_Force() - not yet implemented\n";
+  // opserr << "WARNING PenaltyMP_FE::getM_Force() - not yet implemented\n";
  return *resid;
 }
 
@@ -270,7 +270,7 @@ PenaltyMP_FE::determineTangent(void)
     // now form the tangent: [K] = alpha * [C]^t[C]
     // *(tang) = (*C)^(*C);
     // *(tang) *= alpha;
-
+    /*
 	// THIS IS A WORKAROUND UNTIL WE GET addMatrixTransposeProduct() IN
 	// THE Matrix CLASS OR UNROLL THIS COMPUTATION
 	int rows = C->noRows();
@@ -283,6 +283,10 @@ PenaltyMP_FE::determineTangent(void)
 			CT(k,l) = Cref(l,k);
 	// Compute alpha*(C^*C)
 	tang->addMatrixProduct(0.0, CT, Cref, alpha);
+    */
+    // workaround no longer required
+    const Matrix &Cref = *C;
+    tang->addMatrixTransposeProduct(0.0, Cref, Cref, alpha);
 }
 
 

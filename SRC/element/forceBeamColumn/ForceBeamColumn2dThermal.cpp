@@ -87,9 +87,9 @@ Matrix ForceBeamColumn2dThermal::theMatrix(6,6);
 Vector ForceBeamColumn2dThermal::theVector(6);
 double ForceBeamColumn2dThermal::workArea[200];
 
-Vector *ForceBeamColumn2dThermal::vsSubdivide = 0;
-Matrix *ForceBeamColumn2dThermal::fsSubdivide = 0;
-Vector *ForceBeamColumn2dThermal::SsrSubdivide = 0;
+Vector ForceBeamColumn2dThermal::vsSubdivide[maxNumSections];
+Matrix ForceBeamColumn2dThermal::fsSubdivide[maxNumSections];
+Vector ForceBeamColumn2dThermal::SsrSubdivide[maxNumSections];
 
 void* OPS_ForceBeamColumn2dThermal()
 {
@@ -173,17 +173,6 @@ ForceBeamColumn2dThermal::ForceBeamColumn2dThermal():
 {
   theNodes[0] = 0;  
   theNodes[1] = 0;
-
-  if (vsSubdivide == 0)
-    vsSubdivide  = new Vector [maxNumSections];
-  if (fsSubdivide == 0)
-    fsSubdivide  = new Matrix [maxNumSections];
-  if (SsrSubdivide == 0)
-    SsrSubdivide  = new Vector [maxNumSections];
-  if (!vsSubdivide || !fsSubdivide || !SsrSubdivide) {
-    opserr << "ForceBeamColumn2dThermal::ForceBeamColumn2dThermal() -- failed to allocate Subdivide arrays";   
-    exit(-1);
-  }
 }
 
 // constructor which takes the unique element tag, sections,
@@ -228,17 +217,6 @@ ForceBeamColumn2dThermal::ForceBeamColumn2dThermal (int tag, int nodeI, int node
   if(Vsth0==0)
 	  Vsth0 = new Vector[maxNumSections];
   
-  if (vsSubdivide == 0)
-    vsSubdivide  = new Vector [maxNumSections];
-  if (fsSubdivide == 0)
-    fsSubdivide  = new Matrix [maxNumSections];
-  if (SsrSubdivide == 0)
-    SsrSubdivide  = new Vector [maxNumSections];
-  if (!vsSubdivide || !fsSubdivide || !SsrSubdivide) {
-    opserr << "ForceBeamColumn2dThermal::ForceBeamColumn2dThermal() -- failed to allocate Subdivide arrays";   
-    exit(-1);
-  }
-
   for (int m=0; m<numSections; m++) {
  Vsth0[m] = Vector(2);
  Vsth0[m].Zero();
@@ -922,23 +900,6 @@ ForceBeamColumn2dThermal::update()
 	  opserr<<"ForceBasedBeam:SeTrial "<<j<<"  "<<SeTrial<<  " dSe "<<dSe<<endln;
 #endif
 
-	  if (beamIntegr->addElasticFlexibility(L, f) < 0) {
-	    vr(0) += f(0,0)*SeTrial(0);
-	    vr(1) += f(1,1)*SeTrial(1) + f(1,2)*SeTrial(2);
-	    vr(2) += f(2,1)*SeTrial(1) + f(2,2)*SeTrial(2);
-	  }
-
-	  double v0[3];
-	  v0[0] = 0.0; v0[1] = 0.0; v0[2] = 0.0;
-
-	  for (int ie = 0; ie < numEleLoads; ie++) 
-	    beamIntegr->addElasticDeformations(eleLoads[ie], eleLoadFactors[ie], L, v0);
-
-	  // Add effects of element loads
-	  vr(0) += v0[0];
-	  vr(1) += v0[1];
-	  vr(2) += v0[2];
-	  
 	  for (i=0; i<numSections; i++) {
 	    
 	    int order      = sections[i]->getOrder();
@@ -2062,9 +2023,6 @@ ForceBeamColumn2dThermal::getInitialFlexibility(Matrix &fe)
   double L = crdTransf->getInitialLength();
   double oneOverL  = 1.0/L;  
   
-  // Flexibility from elastic interior
-  beamIntegr->addElasticFlexibility(L, fe);
-  
   double xi[maxNumSections];
   beamIntegr->getSectionLocations(numSections, L, xi);
   
@@ -2468,35 +2426,13 @@ ForceBeamColumn2dThermal::setSectionPointers(int numSec, SectionForceDeformation
 int
 ForceBeamColumn2dThermal::displaySelf(Renderer &theViewer, int displayMode, float fact, const char **displayModes, int numModes)
 {
-	static Vector v1(3);
-	static Vector v2(3);
+    static Vector v1(3);
+    static Vector v2(3);
 
-	if (displayMode >= 0) {
+    theNodes[0]->getDisplayCrds(v1, fact, displayMode);
+    theNodes[1]->getDisplayCrds(v2, fact, displayMode);
 
-		theNodes[0]->getDisplayCrds(v1, fact);
-		theNodes[1]->getDisplayCrds(v2, fact);
-
-	}
-	else {
-
-		theNodes[0]->getDisplayCrds(v1, 0.);
-		theNodes[1]->getDisplayCrds(v2, 0.);
-
-		// add eigenvector values
-		int mode = displayMode  *  -1;
-		const Matrix &eigen1 = theNodes[0]->getEigenvectors();
-		const Matrix &eigen2 = theNodes[1]->getEigenvectors();
-		if (eigen1.noCols() >= mode) {
-			for (int i = 0; i < 2; i++) {
-				v1(i) += eigen1(i, mode - 1)*fact;
-				v2(i) += eigen2(i, mode - 1)*fact;
-			}
-		}
-	}
-
-
-
-	return theViewer.drawLine(v1, v2, 1.0, 1.0, this->getTag());
+    return theViewer.drawLine(v1, v2, 1.0, 1.0, this->getTag());
 }
 
 Response*
@@ -2804,8 +2740,6 @@ ForceBeamColumn2dThermal::getResponse(int responseID, Information &eleInfo)
       d2 += (wts[i]*L)*kappa*b;
     }
     
-    d2 += beamIntegr->getTangentDriftI(L, LI, Se(1), Se(2));
-    
     for (i = numSections-1; i >= 0; i--) {
       double x = pts[i]*L;
       if (x < LI)
@@ -2820,8 +2754,6 @@ ForceBeamColumn2dThermal::getResponse(int responseID, Information &eleInfo)
       d3 += (wts[i]*L)*kappa*b;
     }
     
-    d3 += beamIntegr->getTangentDriftJ(L, LI, Se(1), Se(2));
-
     static Vector d(2);
     d(0) = d2;
     d(1) = d3;
@@ -3391,9 +3323,6 @@ ForceBeamColumn2dThermal::computedqdh(int gradNumber)
   static Matrix dfedh(3,3);
   dfedh.Zero();
 
-  if (beamIntegr->addElasticFlexDeriv(L, dfedh, dLdh) < 0)
-    dvdh.addMatrixVector(1.0, dfedh, Se, -1.0);
-  
   //opserr << "dfedh: " << dfedh << endln;
 
   static Vector dqdh(3);
@@ -3416,8 +3345,6 @@ ForceBeamColumn2dThermal::computedfedh(int gradNumber)
 
   double dLdh = crdTransf->getdLdh();
   double d1oLdh = crdTransf->getd1overLdh();
-
-  beamIntegr->addElasticFlexDeriv(L, dfedh, dLdh);
 
   double xi[maxNumSections];
   beamIntegr->getSectionLocations(numSections, L, xi);

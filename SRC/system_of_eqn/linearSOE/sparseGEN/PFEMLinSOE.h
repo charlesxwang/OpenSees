@@ -37,6 +37,7 @@
 
 
 #include <LinearSOE.h>
+#include <OPS_Stream.h>
 #include <Vector.h>
 #include <ID.h>
 extern "C" {
@@ -53,6 +54,8 @@ class PFEMLinSOE : public LinearSOE
     PFEMLinSOE(PFEMSolver& theSolver, int classTag);
 
     virtual ~PFEMLinSOE();
+
+    virtual int solve(void);
 
     virtual int getNumEqn(void) const;
     virtual int setSize(Graph& theGraph);
@@ -82,6 +85,9 @@ class PFEMLinSOE : public LinearSOE
     friend class PFEMSolver_Umfpack;
     friend class PFEMSolver_Laplace;
     friend class PFEMSolver_LumpM;
+
+    virtual bool isFluidID(const ID& id) const;
+    void saveK(OPS_Stream& output);
 
 private:
 

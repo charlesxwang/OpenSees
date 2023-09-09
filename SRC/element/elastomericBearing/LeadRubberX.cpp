@@ -256,6 +256,9 @@ void *OPS_LeadRubberX()
             opserr << ", for space problem need 6 - LeadRubberX \n"; 
         }
         theEle = new LeadRubberX(iData[0], iData[1], iData[2], dData[0], dData[1], dData[2], dData[3], dData[4], dData[5], dData[6], dData[7], dData[8], y, x, kl, phi, al, sDratio, m, cd1, tc1, qL1, cL1, kS1, aS1, tag1, tag2, tag3, tag4, tag5);
+    } else {
+        opserr << "LeadRubberX is only available for ndm=3 three-dimensional models" << endln;
+        return 0;
     }
     
     if (theEle == 0) {
@@ -318,7 +321,7 @@ LeadRubberX::LeadRubberX(int eleTag, int Nd1, int Nd2, double qd, double alpha1,
     }
     double Er = Ec/3.0;                                     // Rotation modulus of bearing
     double As = A*h/Tr;                                     // Adjusted shear area of bearing
-    double Is = I*h/Tr;                                     // Adjusted moment of intertia of bearing
+    double Is = I*h/Tr;                                     // Adjusted moment of inertia of bearing
     double Pe = PI*PI*Er*Is/(h*h);                          // Euler buckling load of bearing
     Fcr = -sqrt(Pe*G*As);                                   // Critical buckling load in compression
     Fcrn = Fcr;                                             // Current value of critical buckling load
@@ -1079,41 +1082,13 @@ int LeadRubberX::recvSelf(int commitTag, Channel &rChannel,
 int LeadRubberX::displaySelf(Renderer &theViewer,
     int displayMode, float fact, const char **modes, int numMode)
 {
-    // first determine the end points of the element based on
-    // the display factor (a measure of the distorted image)
-    const Vector &end1Crd = theNodes[0]->getCrds();
-    const Vector &end2Crd = theNodes[1]->getCrds();
-    
     static Vector v1(3);
     static Vector v2(3);
-    
-    if (displayMode >= 0)  {
-        const Vector &end1Disp = theNodes[0]->getDisp();
-        const Vector &end2Disp = theNodes[1]->getDisp();
-        
-        for (int i=0; i<3; i++)  {
-            v1(i) = end1Crd(i) + end1Disp(i)*fact;
-            v2(i) = end2Crd(i) + end2Disp(i)*fact;
-        }
-    } else  {
-        int mode = displayMode * -1;
-        const Matrix &eigen1 = theNodes[0]->getEigenvectors();
-        const Matrix &eigen2 = theNodes[1]->getEigenvectors();
-        
-        if (eigen1.noCols() >= mode)  {
-            for (int i=0; i<3; i++)  {
-                v1(i) = end1Crd(i) + eigen1(i,mode-1)*fact;
-                v2(i) = end2Crd(i) + eigen2(i,mode-1)*fact;
-            }
-        } else  {
-            for (int i=0; i<3; i++)  {
-                v1(i) = end1Crd(i);
-                v2(i) = end2Crd(i);
-            }
-        }
-    }
-    
-    return theViewer.drawLine (v1, v2, 1.0, 1.0, this->getTag(), 0);
+
+    theNodes[0]->getDisplayCrds(v1, fact, displayMode);
+    theNodes[1]->getDisplayCrds(v2, fact, displayMode);
+
+    return theViewer.drawLine(v1, v2, 1.0, 1.0, this->getTag());
 }
 
 
@@ -1502,9 +1477,9 @@ double LeadRubberX::getCurrentTemp(double qYield, double TL_commit, double v)
         F = 8.0/(3.0*PI)-(1.0/(2.0*sqrt(PI*tau)))*(1.0-(1.0/(12.0*tau))+(1.0/(6.0*pow(4.0*tau,2)))-(1.0/(12.0*pow(4.0*tau,3))));
     }
     double deltaT2 = (dT/(qL*cL*h))*((qYield*v*zC.Norm())/ALead-(kS*TL_trial1/a)*(1.0/F+1.274*((n-1)*ts/a)*pow(tau,-1.0/3.0))); 
-    if (deltaT2 <= 0.0) {
-        deltaT2 = 0.0;
-    }
+    
+    
+    
     
     double TL_trial = TL_commit + 0.5*(deltaT1+deltaT2);
     

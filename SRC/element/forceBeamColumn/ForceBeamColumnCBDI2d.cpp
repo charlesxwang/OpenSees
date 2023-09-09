@@ -83,9 +83,9 @@ Matrix ForceBeamColumnCBDI2d::theMatrix(6,6);
 Vector ForceBeamColumnCBDI2d::theVector(6);
 double ForceBeamColumnCBDI2d::workArea[200];
 
-Vector *ForceBeamColumnCBDI2d::vsSubdivide = 0;
-Matrix *ForceBeamColumnCBDI2d::fsSubdivide = 0;
-Vector *ForceBeamColumnCBDI2d::SsrSubdivide = 0;
+Vector ForceBeamColumnCBDI2d::vsSubdivide[maxNumSections];
+Matrix ForceBeamColumnCBDI2d::fsSubdivide[maxNumSections];
+Vector ForceBeamColumnCBDI2d::SsrSubdivide[maxNumSections];
 
 void* OPS_ForceBeamColumnCBDI2d()
 {
@@ -278,17 +278,6 @@ ForceBeamColumnCBDI2d::ForceBeamColumnCBDI2d():
 {
   theNodes[0] = 0;  
   theNodes[1] = 0;
-
-  if (vsSubdivide == 0)
-    vsSubdivide  = new Vector [maxNumSections];
-  if (fsSubdivide == 0)
-    fsSubdivide  = new Matrix [maxNumSections];
-  if (SsrSubdivide == 0)
-    SsrSubdivide  = new Vector [maxNumSections];
-  if (!vsSubdivide || !fsSubdivide || !SsrSubdivide) {
-    opserr << "ForceBeamColumnCBDI2d::ForceBeamColumnCBDI2d() -- failed to allocate Subdivide arrays";   
-    exit(-1);
-  }
 }
 
 // constructor which takes the unique element tag, sections,
@@ -330,17 +319,6 @@ ForceBeamColumnCBDI2d::ForceBeamColumnCBDI2d (int tag, int nodeI, int nodeJ,
   }
 
   this->setSectionPointers(numSec, sec);
-
-  if (vsSubdivide == 0)
-    vsSubdivide  = new Vector [maxNumSections];
-  if (fsSubdivide == 0)
-    fsSubdivide  = new Matrix [maxNumSections];
-  if (SsrSubdivide == 0)
-    SsrSubdivide  = new Vector [maxNumSections];
-  if (!vsSubdivide || !fsSubdivide || !SsrSubdivide) {
-    opserr << "ForceBeamColumnCBDI2d::ForceBeamColumnCBDI2d() -- failed to allocate Subdivide arrays";   
-    exit(-1);
-  }
 }
 
 // ~ForceBeamColumnCBDI2d():
@@ -892,23 +870,6 @@ ForceBeamColumnCBDI2d::update()
     f.Zero();
     vr.Zero();
       
-    if (beamIntegr->addElasticFlexibility(L, f) < 0) {
-      vr(0) += f(0,0)*SeTrial(0);
-      vr(1) += f(1,1)*SeTrial(1) + f(1,2)*SeTrial(2);
-      vr(2) += f(2,1)*SeTrial(1) + f(2,2)*SeTrial(2);
-    }
-    
-    double v0[3];
-    v0[0] = 0.0; v0[1] = 0.0; v0[2] = 0.0;
-    
-    for (int ie = 0; ie < numEleLoads; ie++) 
-      beamIntegr->addElasticDeformations(eleLoads[ie], eleLoadFactors[ie], L, v0);
-    
-    // Add effects of element loads
-    vr(0) += v0[0];
-    vr(1) += v0[1];
-    vr(2) += v0[2];
-	  
     bool isGamma = false;
 
     for (int i = 0; i < numSections; i++) {
@@ -2014,9 +1975,6 @@ ForceBeamColumnCBDI2d::getInitialFlexibility(Matrix &fe)
   double L = crdTransf->getInitialLength();
   double oneOverL  = 1.0/L;  
   
-  // Flexibility from elastic interior
-  beamIntegr->addElasticFlexibility(L, fe);
-  
   double xi[maxNumSections];
   beamIntegr->getSectionLocations(numSections, L, xi);
   
@@ -2875,40 +2833,13 @@ ForceBeamColumnCBDI2d::setSectionPointers(int numSec, SectionForceDeformation **
 int
 ForceBeamColumnCBDI2d::displaySelf(Renderer &theViewer, int displayMode, float fact, const char **modes, int numMode)
 {
-  // first determine the end points of the beam based on
-  // the display factor (a measure of the distorted image)
-  const Vector &end1Crd = theNodes[0]->getCrds();
-  const Vector &end2Crd = theNodes[1]->getCrds();	
+    static Vector v1(3);
+    static Vector v2(3);
 
-  static Vector v1(3);
-  static Vector v2(3);
+    theNodes[0]->getDisplayCrds(v1, fact, displayMode);
+    theNodes[1]->getDisplayCrds(v2, fact, displayMode);
 
-  if (displayMode >= 0) {
-    const Vector &end1Disp = theNodes[0]->getDisp();
-    const Vector &end2Disp = theNodes[1]->getDisp();
-    
-    for (int i = 0; i < 2; i++) {
-      v1(i) = end1Crd(i) + end1Disp(i)*fact;
-      v2(i) = end2Crd(i) + end2Disp(i)*fact;    
-    }
-  } else {
-    int mode = displayMode  *  -1;
-    const Matrix &eigen1 = theNodes[0]->getEigenvectors();
-    const Matrix &eigen2 = theNodes[1]->getEigenvectors();
-    if (eigen1.noCols() >= mode) {
-      for (int i = 0; i < 2; i++) {
-	v1(i) = end1Crd(i) + eigen1(i,mode-1)*fact;
-	v2(i) = end2Crd(i) + eigen2(i,mode-1)*fact;    
-      }    
-    } else {
-      for (int i = 0; i < 2; i++) {
-	v1(i) = end1Crd(i);
-	v2(i) = end2Crd(i);
-      }    
-    }
-  }
-  
-  return theViewer.drawLine (v1, v2, 1.0, 1.0);
+    return theViewer.drawLine(v1, v2, 1.0, 1.0, this->getTag());
 }
 
 Response*
@@ -3016,6 +2947,15 @@ ForceBeamColumnCBDI2d::setResponse(const char **argv, int argc, OPS_Stream &outp
   else if (strcmp(argv[0],"integrationWeights") == 0)
     theResponse = new ElementResponse(this, 11, Vector(numSections));
 
+  else if (strcmp(argv[0],"sectionTags") == 0)
+    theResponse = new ElementResponse(this, 110, ID(numSections));  
+  
+  else if (strcmp(argv[0],"sectionDisplacements") == 0)
+    theResponse = new ElementResponse(this, 111, Matrix(numSections,3));
+
+  else if (strcmp(argv[0],"cbdiDisplacements") == 0)
+    theResponse = new ElementResponse(this, 112, Matrix(1,3));
+  
   // section response -
   else if (strstr(argv[0],"sectionX") != 0) {
     if (argc > 2) {
@@ -3111,6 +3051,9 @@ ForceBeamColumnCBDI2d::setResponse(const char **argv, int argc, OPS_Stream &outp
       }
     }
   }
+
+  if (theResponse == 0)
+    theResponse = crdTransf->setResponse(argv, argc, output);
   
   output.endTag(); // ElementOutput
 
@@ -3208,8 +3151,6 @@ ForceBeamColumnCBDI2d::getResponse(int responseID, Information &eleInfo)
       d2 += (wts[i]*L)*kappa*b;
     }
     
-    d2 += beamIntegr->getTangentDriftI(L, LI, Se(1), Se(2));
-    
     for (i = numSections-1; i >= 0; i--) {
       double x = pts[i]*L;
       if (x < LI)
@@ -3224,8 +3165,6 @@ ForceBeamColumnCBDI2d::getResponse(int responseID, Information &eleInfo)
       d3 += (wts[i]*L)*kappa*b;
     }
     
-    d3 += beamIntegr->getTangentDriftJ(L, LI, Se(1), Se(2));
-
     static Vector d(2);
     d(0) = d2;
     d(1) = d3;
@@ -3273,6 +3212,85 @@ ForceBeamColumnCBDI2d::getResponse(int responseID, Information &eleInfo)
     return eleInfo.setVector(weights);
   }
 
+  else if (responseID == 110) {
+    ID tags(numSections);
+    for (int i = 0; i < numSections; i++)
+      tags(i) = sections[i]->getTag();
+    return eleInfo.setID(tags);
+  }
+  
+  else if (responseID == 111) {
+    double L = crdTransf->getInitialLength();
+    double pts[maxNumSections];
+    beamIntegr->getSectionLocations(numSections, L, pts);
+    // CBDI influence matrix
+    Matrix ls(numSections, numSections);
+    getCBDIinfluenceMatrix(numSections, pts, L, ls);
+    // Curvature vector
+    Vector kappa(numSections);
+    for (int i = 0; i < numSections; i++) {
+      const ID &code = sections[i]->getType();
+      const Vector &e = sections[i]->getSectionDeformation();
+      int order = sections[i]->getOrder();
+      for (int j = 0; j < order; j++)
+	if (code(j) == SECTION_RESPONSE_MZ)
+	  kappa(i) += e(j);
+    }
+    // Displacement vector
+    Vector dispsy(numSections);
+    dispsy.addMatrixVector(0.0, ls, kappa, 1.0);
+    beamIntegr->getSectionLocations(numSections, L, pts);
+    static Vector uxb(2);
+    static Vector uxg(2);
+    Matrix disps(numSections,3);
+    vp = crdTransf->getBasicTrialDisp();
+    for (int i = 0; i < numSections; i++) {
+      uxb(0) = pts[i]*vp(0); // linear shape function
+      uxb(1) = dispsy(i);
+      uxg = crdTransf->getPointGlobalDisplFromBasic(pts[i],uxb);
+      disps(i,0) = uxg(0);
+      disps(i,1) = uxg(1);
+      disps(i,2) = 0.0;      
+    }
+    return eleInfo.setMatrix(disps);
+  }
+
+  else if (responseID == 112) {
+    double L = crdTransf->getInitialLength();
+    double ipts[maxNumSections];
+    beamIntegr->getSectionLocations(numSections, L, ipts);
+    // CBDI influence matrix
+    double pts[1];
+    pts[0] = eleInfo.theDouble;
+    Matrix ls(1, numSections);
+    getCBDIinfluenceMatrix(1, pts, numSections, ipts, L, ls);
+    // Curvature vector
+    Vector kappa(numSections);
+    for (int i = 0; i < numSections; i++) {
+      const ID &code = sections[i]->getType();
+      const Vector &e = sections[i]->getSectionDeformation();
+      int order = sections[i]->getOrder();
+      for (int j = 0; j < order; j++)
+	if (code(j) == SECTION_RESPONSE_MZ)
+	  kappa(i) += e(j);
+    }
+    // Displacement vector
+    Vector dispsy(1);
+    dispsy.addMatrixVector(0.0, ls, kappa, 1.0);
+    static Vector uxb(2);
+    static Vector uxg(2);
+    Matrix disps(1,3);
+    vp = crdTransf->getBasicTrialDisp();
+    uxb(0) = pts[0]*vp(0); // linear shape function
+    uxb(1) = dispsy(0);
+    uxg = crdTransf->getPointGlobalDisplFromBasic(pts[0],uxb);
+    disps(0,0) = uxg(0);
+    disps(0,1) = uxg(1);
+    disps(0,2) = 0.0;   
+
+    return eleInfo.setMatrix(disps);
+  }
+  
   else
     return -1;
 }
@@ -3955,9 +3973,6 @@ ForceBeamColumnCBDI2d::computedqdh(int gradNumber)
   static Matrix dfedh(3,3);
   dfedh.Zero();
 
-  if (beamIntegr->addElasticFlexDeriv(L, dfedh, dLdh) < 0)
-    dvdh.addMatrixVector(1.0, dfedh, Se, -1.0);
-  
   //opserr << "dfedh: " << dfedh << endln;
 
   static Vector dqdh(3);
@@ -3980,8 +3995,6 @@ ForceBeamColumnCBDI2d::computedfedh(int gradNumber)
 
   double dLdh = crdTransf->getdLdh();
   double d1oLdh = crdTransf->getd1overLdh();
-
-  beamIntegr->addElasticFlexDeriv(L, dfedh, dLdh);
 
   double xi[maxNumSections];
   beamIntegr->getSectionLocations(numSections, L, xi);

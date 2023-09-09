@@ -73,7 +73,7 @@ void* OPS_Inerter()
     
     // dirs
     const char* type = OPS_GetString();
-    if (strcmp(type, "-dir") != 0) {
+    if (strcmp(type, "-dir") != 0 && strcmp(type, "-dof") != 0) {
         opserr << "WARNING expecting -dir dirs\n";
         return 0;
     }
@@ -82,7 +82,12 @@ void* OPS_Inerter()
     while (OPS_GetNumRemainingInputArgs() > 0) {
         int dir;
         numdata = 1;
+        int numArgs = OPS_GetNumRemainingInputArgs();
         if (OPS_GetIntInput(&numdata, &dir) < 0) {
+            if (numArgs > OPS_GetNumRemainingInputArgs()) {
+                // move current arg back by one
+                OPS_ResetCurrentInputArg(-1);
+            }
             break;
         }
         if (dir < 1 || ndf < dir) {
@@ -121,7 +126,7 @@ void* OPS_Inerter()
     double mass = 0.0;
     if (OPS_GetNumRemainingInputArgs() < 1) {
         return new Inerter(idata[0], ndm, idata[1], idata[2],
-            dirs[0], ib);
+            dirs, ib);
     }
     
     while (OPS_GetNumRemainingInputArgs() > 0) {
@@ -241,7 +246,7 @@ Inerter::Inerter(int tag, int dim, int Nd1, int Nd2,
         theNodes[i] = 0;
     
     // check the number of directions
-    if (numDIR < 1 || numDIR > 6)  {
+    if (numDIR < 1) {
         opserr << "Inerter::Inerter() - element: "
             << this->getTag() << " wrong number of directions\n";
         exit(-1);
@@ -262,24 +267,32 @@ Inerter::Inerter(int tag, int dim, int Nd1, int Nd2,
     
     // check p-delta moment distribution ratios
     if (Mratio.Size() == 4) {
-        if (Mratio(0) < 0.0 || Mratio(1) < 0.0 ||
-            Mratio(2) < 0.0 || Mratio(3) < 0.0) {
-            opserr << "Inerter::Inerter() - "
-                << "p-delta moment ratios can not be negative\n";
-            exit(-1);
-        }
-        if (Mratio(0) + Mratio(1) > 1.0) {
-            opserr << "Inerter::Inerter() - "
-                << "incorrect p-delta moment ratios:\nrMy1 + rMy2 = "
-                << Mratio(0) + Mratio(1) << " > 1.0\n";
-            exit(-1);
-        }
-        if (Mratio(2) + Mratio(3) > 1.0) {
-            opserr << "Inerter::Inerter() - "
-                << "incorrect p-delta moment ratios:\nrMz1 + rMz2 = "
-                << Mratio(2) + Mratio(3) << " > 1.0\n";
-            exit(-1);
-        }
+      for (int i = 0; i < 4; i++) {
+	if (Mratio(i) < 0.0) {
+	  opserr << "Inerter::Inerter() - "
+		 << "P-Delta moment ratio " << i+1 << " is negative\n";
+	  Mratio(i) = -Mratio(i);
+	  opserr << "Making the value positive " << Mratio(i) << endln;
+	}
+      }
+      double sumRatio = Mratio(0)+Mratio(1);
+      if (sumRatio > 1.0)  {
+	opserr << "Inerter::Inerter() - "
+	       << "incorrect P-Delta moment ratios:\nrMy1 + rMy2 = "
+	       << sumRatio << " > 1.0\n";
+	Mratio(0) = Mratio(0)/sumRatio;
+	Mratio(1) = Mratio(1)/sumRatio;
+	opserr << "Scaling ratios down to " << Mratio(0) << " and " << Mratio(1) << endln;
+      }
+      sumRatio = Mratio(2)+Mratio(3);
+      if (sumRatio > 1.0)  {
+	opserr << "Inerter::Inerter() - "
+	       << "incorrect P-Delta moment ratios:\nrMz1 + rMz2 = "
+	       << sumRatio << " > 1.0\n";
+	Mratio(2) = Mratio(2)/sumRatio;
+	Mratio(3) = Mratio(3)/sumRatio;
+	opserr << "Scaling ratios down to " << Mratio(2) << " and " << Mratio(3) << endln;	    
+      }
     }
     
     // initialize optional damping matrix
@@ -876,41 +889,13 @@ int Inerter::recvSelf(int commitTag, Channel &rChannel,
 int Inerter::displaySelf(Renderer &theViewer,
     int displayMode, float fact, const char **modes, int numMode)
 {
-    // first determine the end points of the element based on
-    // the display factor (a measure of the distorted image)
-    const Vector &end1Crd = theNodes[0]->getCrds();
-    const Vector &end2Crd = theNodes[1]->getCrds();
-    
     static Vector v1(3);
     static Vector v2(3);
-    
-    if (displayMode >= 0)  {
-        const Vector &end1Disp = theNodes[0]->getDisp();
-        const Vector &end2Disp = theNodes[1]->getDisp();
-        
-        for (int i=0; i<numDIM; i++)  {
-            v1(i) = end1Crd(i) + end1Disp(i)*fact;
-            v2(i) = end2Crd(i) + end2Disp(i)*fact;
-        }
-    } else  {
-        int mode = displayMode * -1;
-        const Matrix &eigen1 = theNodes[0]->getEigenvectors();
-        const Matrix &eigen2 = theNodes[1]->getEigenvectors();
-        
-        if (eigen1.noCols() >= mode)  {
-            for (int i=0; i<numDIM; i++)  {
-                v1(i) = end1Crd(i) + eigen1(i,mode-1)*fact;
-                v2(i) = end2Crd(i) + eigen2(i,mode-1)*fact;
-            }
-        } else  {
-            for (int i=0; i<numDIM; i++)  {
-                v1(i) = end1Crd(i);
-                v2(i) = end2Crd(i);
-            }
-        }
-    }
-    
-    return theViewer.drawLine (v1, v2, 1.0, 1.0, this->getTag(), 0);
+
+    theNodes[0]->getDisplayCrds(v1, fact, displayMode);
+    theNodes[1]->getDisplayCrds(v2, fact, displayMode);
+
+    return theViewer.drawLine(v1, v2, 1.0, 1.0, this->getTag());
 }
 
 
@@ -996,7 +981,7 @@ Response* Inerter::setResponse(const char **argv, int argc,
     output.attr("node1",connectedExternalNodes[0]);
     output.attr("node2",connectedExternalNodes[1]);
     
-    char outputData[10];
+    char outputData[80];
     
     // global forces
     if (strcmp(argv[0],"force") == 0 || strcmp(argv[0],"forces") == 0 ||

@@ -49,10 +49,10 @@ class LinearSOESolver;
 class MumpsSOE : public LinearSOE
 {
   public:
-    MumpsSOE(MumpsSolver &theSolver, int matType=2);        
+    MumpsSOE(MumpsSolver &theSolver, int matType=0);        
     MumpsSOE();       
     MumpsSOE(int classTag);        
-    MumpsSOE(LinearSOESolver &theSolver, int classTag, int matType = 2);        
+    MumpsSOE(LinearSOESolver &theSolver, int classTag, int matType = 0);        
 
     virtual ~MumpsSOE();
 
@@ -83,7 +83,7 @@ class MumpsSOE : public LinearSOE
     int size;            // order of A
     int nnz;             // number of non-zeros in A
     double *A, *B, *X;   // 1d arrays containing coefficients of A, B and X
-    int *colA, *rowA, *rowB, *colStartA; // int arrays containing info about coeficientss in A
+    int *colA, *rowA, *rowB, *colStartA; // int arrays containing info about coefficients in A
     Vector *vectX;
     Vector *vectB;    
     int Asize, Bsize;    // size of the 1d array holding A

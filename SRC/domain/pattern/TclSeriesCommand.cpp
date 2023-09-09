@@ -37,6 +37,7 @@
 #include <ConstantSeries.h>
 #include <RectangularSeries.h>
 #include <TrigSeries.h>
+#include <RampSeries.h> // CDM
 #include <PulseSeries.h>
 #include <TriangleSeries.h>
 #include <PathTimeSeries.h>
@@ -45,19 +46,17 @@
 #include <PeerNGAMotion.h>
 #include <string.h>
 
-
 #ifdef _RELIABILITY
 #include <DiscretizedRandomProcessSeries.h>
 #include <SimulatedRandomProcessSeries.h>
 #include <Spectrum.h>
 #include <RandomNumberGenerator.h>
 #include <ReliabilityDomain.h>
-#include <NewDiscretizedRandomProcessSeries.h>
+//#include <NewDiscretizedRandomProcessSeries.h>
 
 extern ReliabilityDomain *theReliabilityDomain;
 extern RandomNumberGenerator *theRandomNumberGenerator;
 #endif
-
 
 #include <SimulationInformation.h>
 extern SimulationInformation simulationInfo;
@@ -74,20 +73,16 @@ extern void *OPS_ConstantSeries(void);
 extern void *OPS_LinearSeries(void);
 extern void *OPS_TriangleSeries(void);
 extern void *OPS_TrigSeries(void);
+extern void *OPS_RampSeries(void); // CDM
 extern void *OPS_RectangularSeries(void);
 extern void *OPS_PulseSeries(void);
 extern void *OPS_PeerMotion(void);
 extern void *OPS_PeerNGAMotion(void);
 
+#include <elementAPI.h>
+extern "C" int OPS_ResetInputNoBuilder(ClientData clientData, Tcl_Interp * interp, int cArg, int mArg, TCL_Char * *argv, Domain * domain);
+
 #include <TclModelBuilder.h>
-
-extern int OPS_ResetInputNoBuilder(ClientData clientData,
-			  Tcl_Interp *interp,  
-			  int cArg, 
-			  int mArg, 
-			  TCL_Char **argv, 
-			  Domain *domain);
-
 
 TimeSeries *
 TclTimeSeriesCommand(ClientData clientData, 
@@ -121,6 +116,14 @@ TclTimeSeriesCommand(ClientData clientData,
     void *theResult = OPS_LinearSeries();
     if (theResult != 0)
       theSeries = (TimeSeries *)theResult;
+
+  }
+
+  else if ((strcmp(argv[0], "Ramp") == 0) || (strcmp(argv[0], "RampSeries") == 0)) { // CDM
+
+      void* theResult = OPS_RampSeries();
+      if (theResult != 0)
+          theSeries = (TimeSeries*)theResult;
 
   }
 
@@ -324,7 +327,6 @@ TclTimeSeriesCommand(ClientData clientData,
 
       endMarker++;
     }
-    
 
     if (filePathName != 0 && fileTimeName == 0 && timeIncr != 0.0) {
       //      const char *pwd = getInterpPWD(interp);
@@ -398,7 +400,6 @@ TclTimeSeriesCommand(ClientData clientData,
     }
   }
 
-
   else if ((strcmp(argv[0],"PeerNGADatabase") == 0) || (strcmp(argv[0],"PeerNGAMotion") == 0)) {
 
 
@@ -433,7 +434,6 @@ TclTimeSeriesCommand(ClientData clientData,
       }
     }
   }
-
 
 #ifdef _RELIABILITY
 
@@ -485,6 +485,7 @@ TclTimeSeriesCommand(ClientData clientData,
   }
   
    ///// added by K Fujimura /////
+   /*FMK RELIABILITY
   else if (strcmp(argv[0],"NewDiscretizedRandomProcess") == 0) {
     
     double mean, maxStdv;
@@ -529,9 +530,9 @@ TclTimeSeriesCommand(ClientData clientData,
     }	
     
     // Parsing was successful, create the random process series object
-    theSeries = new NewDiscretizedRandomProcessSeries(numModFuncs,theModFUNCS,mean,maxStdv);       	
+  theSeries = new NewDiscretizedRandomProcessSeries(numModFuncs,theModFUNCS,mean,maxStdv);       	
   }
-
+  */
   else if (strcmp(argv[0],"SimulatedRandomProcess") == 0) {
     
     int spectrumTag, numFreqIntervals;
@@ -572,15 +573,13 @@ TclTimeSeriesCommand(ClientData clientData,
 
 #endif
 
-
-	
   else {
     for (int i = 0; i < argc; i++)
       opserr << argv[i] << ' ';
     opserr << endln;
     // type of load pattern type unknown
     opserr << "WARNING unknown Series type " << argv[0] << " - ";
-    opserr << " valid types: Linear, Rectangular, Path, Constant, Trig, Sine\n";
+    opserr << " valid types: Linear, Rectangular, Path, Constant, Trig, Sine, Ramp\n";
     return 0;
   }
 
@@ -610,4 +609,3 @@ TclSeriesCommand(ClientData clientData, Tcl_Interp *interp, TCL_Char *arg)
   cleanup(argv);
   return theSeries;
 }
-

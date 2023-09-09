@@ -32,7 +32,6 @@
 #include <Element.h>
 #include <Node.h>
 #include <SectionForceDeformation.h>
-#include <R3vectors.h>
 
 class ShellMITC9 : public Element
 {
@@ -55,6 +54,8 @@ class ShellMITC9 : public Element
     //destructor 
     virtual ~ShellMITC9( ) ;
 
+    const char *getClassType(void) const {return "ShellMITC9";}
+    
     //get the number of external nodes
     int getNumExternalNodes( ) const ;
     //return connected external nodes

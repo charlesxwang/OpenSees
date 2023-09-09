@@ -115,6 +115,7 @@ void* OPS_VTK_Recorder()
     OutputData outputData;
     std::vector<VTK_Recorder::EleData> eledata;
     double dT = 0.0;
+    double rTolDt = 0.00001;
 
     while(numdata > 0) {
 	const char* type = OPS_GetString();
@@ -210,26 +211,39 @@ void* OPS_VTK_Recorder()
 		return 0;
 	    }
 	    if (dT < 0) dT = 0;
+	} else if(strcmp(type, "-rTolDt") == 0) {
+	    numdata = OPS_GetNumRemainingInputArgs();
+	    if(numdata < 1) {
+		opserr<<"WARNING: needs rTolDt \n";
+		return 0;
+	    }
+	    numdata = 1;
+	    if(OPS_GetDoubleInput(&numdata,&rTolDt) < 0) {
+		opserr << "WARNING: failed to read rTolDt\n";
+		return 0;
+	    }
+	    if (rTolDt < 0) rTolDt = 0;
 	}
 	numdata = OPS_GetNumRemainingInputArgs();
     }
 
     // create recorder
-    return new VTK_Recorder(name,outputData,eledata,indent,precision,dT);
+    return new VTK_Recorder(name,outputData,eledata,indent,precision,dT, rTolDt);
 }
 
 VTK_Recorder::VTK_Recorder(const char *inputName, 
 			   const OutputData& outData,
 			   const std::vector<EleData>& edata, 
-			   int ind, int pre, double dt)
+			   int ind, int pre, double dt, double rTolDt)
     :Recorder(RECORDER_TAGS_VTK_Recorder), 
      indentsize(ind), 
      precision(pre),
      indentlevel(0), 
      quota('\"'), 
      theDomain(0),
-     nextTimeStampToRecord(0),
-     deltaT(0), 
+     nextTimeStampToRecord(0.0),
+     deltaT(dt),
+     relDeltaTTol(rTolDt),
      counter(0),
      initializationDone(false),
      sendSelfCount(0)
@@ -276,7 +290,7 @@ VTK_Recorder::VTK_Recorder(const char *inputName,
   //
   // spit out header to file
   //
-
+  thePVDFile << "<?xml version="<<quota<<"1.0"<<quota<<"?>\n";
   thePVDFile << "<VTKFile type=\"Collection\" version=\"1.0\" \n";
   thePVDFile << "byte_order=\"LittleEndian\" \n";
   thePVDFile << "compressor=\"vtkZLibDataCompressor\">\n";
@@ -291,8 +305,9 @@ VTK_Recorder::VTK_Recorder()
    indentlevel(0), 
    quota('\"'), 
    theDomain(0),
-   nextTimeStampToRecord(0),
-   deltaT(0), 
+   nextTimeStampToRecord(0.0),
+   deltaT(0.0),
+   relDeltaTTol(0.00001),
    counter(0),
    initializationDone(false),
    sendSelfCount(0)   
@@ -327,7 +342,9 @@ VTK_Recorder::record(int ctag, double timeStamp)
     initializationDone = true;
   }
 
-  if (deltaT == 0.0 || timeStamp >= nextTimeStampToRecord) {
+  // where relDeltaTTol is the maximum reliable ratio between analysis time step and deltaT
+  // and provides tolerance for floating point precision (see floating-point-tolerance-for-recorder-time-step.md)
+    if (deltaT == 0.0 || timeStamp - nextTimeStampToRecord >= -deltaT * relDeltaTTol) {
     
     if (deltaT != 0.0) 
       nextTimeStampToRecord = timeStamp + deltaT;
@@ -408,6 +425,7 @@ VTK_Recorder::vtu()
   theFileVTU << std::scientific;
   
   // header
+  theFileVTU<<"<?xml version="<<quota<<"1.0"<<quota<<"?>\n";
   theFileVTU<<"<VTKFile type="<<quota<<"UnstructuredGrid"<<quota;
   theFileVTU<<" version="<<quota<<"1.0"<<quota;
   theFileVTU<<" byte_order="<<quota<<"LittleEndian"<<quota;
@@ -429,7 +447,7 @@ VTK_Recorder::vtu()
   this->incrLevel();
 
   // node tags
-  theFileVTU<<"<DataArray type=\"Int32\" Name=\"Node Tag\" format=\"ascii\">\n";
+  theFileVTU<<"<DataArray type=\"Int64\" Name=\"Node Tag\" format=\"ascii\">\n";
   this->incrLevel();
   for (auto i : theNodeTags)
     theFileVTU << i << " ";
@@ -438,7 +456,7 @@ VTK_Recorder::vtu()
 
   // node displacements
   if (outputData.disp == true) {
-    theFileVTU<<"<DataArray type=\"Float32\" Name=\"Disp\" NumberOfComponents=\"" << maxNDF << "\" format=\"ascii\">\n";
+    theFileVTU<<"<DataArray type=\"Float64\" Name=\"Disp\" NumberOfComponents=\"" << maxNDF << "\" format=\"ascii\">\n";
     for (auto i : theNodeTags) {
       Node *theNode=theDomain->getNode(i);
       const Vector &output=theNode->getDisp();
@@ -453,7 +471,7 @@ VTK_Recorder::vtu()
   }
 
   if (outputData.disp2 == true) {
-    theFileVTU<<"<DataArray type=\"Float32\" Name=\"Disp2\" NumberOfComponents=\"" << 2 << "\" format=\"ascii\">\n";
+    theFileVTU<<"<DataArray type=\"Float64\" Name=\"Disp2\" NumberOfComponents=\"" << 2 << "\" format=\"ascii\">\n";
     for (auto i : theNodeTags) {
       Node *theNode=theDomain->getNode(i);
       const Vector &output=theNode->getDisp();
@@ -469,7 +487,7 @@ VTK_Recorder::vtu()
   }
 
   if (outputData.disp3 == true) {
-    theFileVTU<<"<DataArray type=\"Float32\" Name=\"Disp3\" NumberOfComponents=\"" << 3 << "\" format=\"ascii\">\n";
+    theFileVTU<<"<DataArray type=\"Float64\" Name=\"Disp3\" NumberOfComponents=\"" << 3 << "\" format=\"ascii\">\n";
     for (auto i : theNodeTags) {
       Node *theNode=theDomain->getNode(i);
       const Vector &output=theNode->getDisp();
@@ -489,7 +507,7 @@ VTK_Recorder::vtu()
   //
 
   if (outputData.vel == true) {
-    theFileVTU<<"<DataArray type=\"Float32\" Name=\"Vel\" NumberOfComponents=\"" << maxNDF << "\" format=\"ascii\">\n";
+    theFileVTU<<"<DataArray type=\"Float64\" Name=\"Vel\" NumberOfComponents=\"" << maxNDF << "\" format=\"ascii\">\n";
     for (auto i : theNodeTags) {
       Node *theNode=theDomain->getNode(i);
       const Vector &output=theNode->getVel();
@@ -508,7 +526,7 @@ VTK_Recorder::vtu()
   //
 
   if (outputData.accel == true) {
-    theFileVTU<<"<DataArray type=\"Float32\" Name=\"Accel\" NumberOfComponents=\"" << maxNDF << "\" format=\"ascii\">\n";
+    theFileVTU<<"<DataArray type=\"Float64\" Name=\"Accel\" NumberOfComponents=\"" << maxNDF << "\" format=\"ascii\">\n";
     for (auto i : theNodeTags) {
       Node *theNode=theDomain->getNode(i);
       const Vector &output=theNode->getAccel();
@@ -529,14 +547,14 @@ VTK_Recorder::vtu()
   theFileVTU<<"</PointData>\n<CellData>\n";
 
   // ele tags
-  theFileVTU<<"<DataArray type=\"Int32\" Name=\"Element Tag\" format=\"ascii\">\n";
+  theFileVTU<<"<DataArray type=\"Int64\" Name=\"Element Tag\" format=\"ascii\">\n";
   this->incrLevel();
   for (auto i : theEleTags)
     theFileVTU << i << " ";
   theFileVTU<<"\n</DataArray>\n";
 
   // ele class tags
-  theFileVTU<<"<DataArray type=\"Int32\" Name=\"Element Class\" format=\"ascii\">\n";
+  theFileVTU<<"<DataArray type=\"Int64\" Name=\"Element Class\" format=\"ascii\">\n";
   this->incrLevel();
   for (auto i : theEleClassTags)
     theFileVTU << i << " ";
@@ -551,7 +569,7 @@ VTK_Recorder::vtu()
   this->incrLevel();
   this->indent();
   theFileVTU<<"<Points>\n";
-  theFileVTU<<"<DataArray type=\"Float32\" Name=\"Points\" NumberOfComponents=\"3\" format=\"ascii\">\n";
+  theFileVTU<<"<DataArray type=\"Float64\" Name=\"Points\" NumberOfComponents=\"3\" format=\"ascii\">\n";
   for (auto i : theNodeTags) {
     Node *theNode=theDomain->getNode(i);
     const Vector &crd=theNode->getCrds();
@@ -604,7 +622,7 @@ VTK_Recorder::vtu()
 
   this->indent();
   /*
-    theFileVTU<<"<DataArray type="<<quota<<"Float32"<<quota;
+    theFileVTU<<"<DataArray type="<<quota<<"Float64"<<quota;
     theFileVTU<<" Name="<<quota<<"Points"<<quota;
     theFileVTU<<" NumberOfComponents="<<quota<<3<<quota;
     theFileVTU<<" format="<<quota<<"ascii"<<quota<<">\n";
@@ -629,7 +647,7 @@ VTK_Recorder::vtu()
     // node velocity
     if(nodedata.vel) {
 	this->indent();
-	theFileVTU<<"<DataArray type="<<quota<<"Float32"<<quota;
+	theFileVTU<<"<DataArray type="<<quota<<"Float64"<<quota;
 	theFileVTU<<" Name="<<quota<<"Velocity"<<quota;
 	theFileVTU<<" NumberOfComponents="<<quota<<nodendf<<quota;
 	theFileVTU<<" format="<<quota<<"ascii"<<quota<<">\n";
@@ -654,7 +672,7 @@ VTK_Recorder::vtu()
     // node displacement
     if(nodedata.disp) {
 	this->indent();
-	theFileVTU<<"<DataArray type="<<quota<<"Float32"<<quota;
+	theFileVTU<<"<DataArray type="<<quota<<"Float64"<<quota;
 	theFileVTU<<" Name="<<quota<<"Displacement"<<quota;
 	theFileVTU<<" NumberOfComponents="<<quota<<nodendf<<quota;
 	theFileVTU<<" format="<<quota<<"ascii"<<quota<<">\n";
@@ -679,7 +697,7 @@ VTK_Recorder::vtu()
     // node incr displacement
     if(nodedata.incrdisp) {
 	this->indent();
-	theFileVTU<<"<DataArray type="<<quota<<"Float32"<<quota;
+	theFileVTU<<"<DataArray type="<<quota<<"Float64"<<quota;
 	theFileVTU<<" Name="<<quota<<"IncrDisplacement"<<quota;
 	theFileVTU<<" NumberOfComponents="<<quota<<nodendf<<quota;
 	theFileVTU<<" format="<<quota<<"ascii"<<quota<<">\n";
@@ -704,7 +722,7 @@ VTK_Recorder::vtu()
     // node acceleration
     if(nodedata.accel) {
 	this->indent();
-	theFileVTU<<"<DataArray type="<<quota<<"Float32"<<quota;
+	theFileVTU<<"<DataArray type="<<quota<<"Float64"<<quota;
 	theFileVTU<<" Name="<<quota<<"Acceleration"<<quota;
 	theFileVTU<<" NumberOfComponents="<<quota<<nodendf<<quota;
 	theFileVTU<<" format="<<quota<<"ascii"<<quota<<">\n";
@@ -729,7 +747,7 @@ VTK_Recorder::vtu()
     // node pressure
     if(nodedata.pressure) {
 	this->indent();
-	theFileVTU<<"<DataArray type="<<quota<<"Float32"<<quota;
+	theFileVTU<<"<DataArray type="<<quota<<"Float64"<<quota;
 	theFileVTU<<" Name="<<quota<<"Pressure"<<quota;
 	theFileVTU<<" format="<<quota<<"ascii"<<quota<<">\n";
 	this->incrLevel();
@@ -750,7 +768,7 @@ VTK_Recorder::vtu()
     // node reaction
     if(nodedata.reaction) {
 	this->indent();
-	theFileVTU<<"<DataArray type="<<quota<<"Float32"<<quota;
+	theFileVTU<<"<DataArray type="<<quota<<"Float64"<<quota;
 	theFileVTU<<" Name="<<quota<<"Reaction"<<quota;
 	theFileVTU<<" NumberOfComponents="<<quota<<nodendf<<quota;
 	theFileVTU<<" format="<<quota<<"ascii"<<quota<<">\n";
@@ -775,7 +793,7 @@ VTK_Recorder::vtu()
     // node unbalanced load
     if(nodedata.unbalanced) {
 	this->indent();
-	theFileVTU<<"<DataArray type="<<quota<<"Float32"<<quota;
+	theFileVTU<<"<DataArray type="<<quota<<"Float64"<<quota;
 	theFileVTU<<" Name="<<quota<<"UnbalancedLoad"<<quota;
 	theFileVTU<<" NumberOfComponents="<<quota<<nodendf<<quota;
 	theFileVTU<<" format="<<quota<<"ascii"<<quota<<">\n";
@@ -800,7 +818,7 @@ VTK_Recorder::vtu()
     // node mass
     if(nodedata.mass) {
 	this->indent();
-	theFileVTU<<"<DataArray type="<<quota<<"Float32"<<quota;
+	theFileVTU<<"<DataArray type="<<quota<<"Float64"<<quota;
 	theFileVTU<<" Name="<<quota<<"NodeMass"<<quota;
 	theFileVTU<<" NumberOfComponents="<<quota<<nodendf<<quota;
 	theFileVTU<<" format="<<quota<<"ascii"<<quota<<">\n";
@@ -825,7 +843,7 @@ VTK_Recorder::vtu()
     // node eigen vector
     for(int k=0; k<nodedata.numeigen; k++) {
 	this->indent();
-	theFileVTU<<"<DataArray type="<<quota<<"Float32"<<quota;
+	theFileVTU<<"<DataArray type="<<quota<<"Float64"<<quota;
 	theFileVTU<<" Name="<<quota<<"EigenVector"<<k+1<<quota;
 	theFileVTU<<" NumberOfComponents="<<quota<<nodendf<<quota;
 	theFileVTU<<" format="<<quota<<"ascii"<<quota<<">\n";
@@ -1008,6 +1026,7 @@ VTK_Recorder::setVTKType()
     vtktypes[ELE_TAG_ZeroLengthND] = VTK_POLY_VERTEX;
     vtktypes[ELE_TAG_ZeroLengthContact2D] = VTK_POLY_VERTEX;
     vtktypes[ELE_TAG_ZeroLengthContact3D] = VTK_POLY_VERTEX;
+    vtktypes[ELE_TAG_ZeroLengthContactASDimplex] = VTK_POLY_VERTEX;
     vtktypes[ELE_TAG_ZeroLengthContactNTS2D] = VTK_POLY_VERTEX;
     vtktypes[ELE_TAG_ZeroLengthInterface2D] = VTK_POLY_VERTEX;
     vtktypes[ELE_TAG_CoupledZeroLength] = VTK_POLY_VERTEX;
@@ -1018,6 +1037,7 @@ VTK_Recorder::setVTKType()
     vtktypes[ELE_TAG_FourNodeQuad] = VTK_QUAD;
     vtktypes[ELE_TAG_FourNodeQuad3d] = VTK_QUAD;
     vtktypes[ELE_TAG_Tri31] = VTK_TRIANGLE;
+    vtktypes[ELE_TAG_SixNodeTri] = VTK_TRIANGLE;
     vtktypes[ELE_TAG_BeamWithHinges2d] = VTK_LINE;
     vtktypes[ELE_TAG_BeamWithHinges3d] = VTK_LINE;
     vtktypes[ELE_TAG_EightNodeBrick] = VTK_HEXAHEDRON;
@@ -1039,6 +1059,8 @@ VTK_Recorder::setVTKType()
     vtktypes[ELE_TAG_PlateMITC4] = VTK_QUAD;
     vtktypes[ELE_TAG_ShellMITC4] = VTK_QUAD;
     vtktypes[ELE_TAG_ShellMITC9] = VTK_POLY_VERTEX;
+    vtktypes[ELE_TAG_ASDShellQ4] = VTK_QUAD;
+    vtktypes[ELE_TAG_ASDShellT3] = VTK_TRIANGLE;
     vtktypes[ELE_TAG_Plate1] = VTK_QUAD;
     vtktypes[ELE_TAG_Brick] = VTK_HEXAHEDRON;
     vtktypes[ELE_TAG_BbarBrick] = VTK_HEXAHEDRON;
@@ -1046,6 +1068,8 @@ VTK_Recorder::setVTKType()
     vtktypes[ELE_TAG_EnhancedQuad] = VTK_QUAD;
     vtktypes[ELE_TAG_ConstantPressureVolumeQuad] = VTK_QUAD;
     vtktypes[ELE_TAG_NineNodeMixedQuad] = VTK_POLY_VERTEX;
+    vtktypes[ELE_TAG_NineNodeQuad] = VTK_POLY_VERTEX;
+    vtktypes[ELE_TAG_EightNodeQuad] = VTK_POLY_VERTEX;
     vtktypes[ELE_TAG_DispBeamColumn2d] = VTK_LINE;
     vtktypes[ELE_TAG_TimoshenkoBeamColumn2d] = VTK_LINE;
     vtktypes[ELE_TAG_DispBeamColumn3d] = VTK_LINE;
@@ -1121,6 +1145,7 @@ VTK_Recorder::setVTKType()
     vtktypes[ELE_TAG_TFP_Bearing] = VTK_LINE;
     vtktypes[ELE_TAG_TFP_Bearing2d] = VTK_LINE;
     vtktypes[ELE_TAG_TripleFrictionPendulum] = VTK_LINE;
+    vtktypes[ELE_TAG_TripleFrictionPendulumX] = VTK_LINE;
     vtktypes[ELE_TAG_PFEMElement2D] = VTK_TRIANGLE;
     vtktypes[ELE_TAG_FourNodeQuad02] = VTK_QUAD;
     vtktypes[ELE_TAG_cont2d01] = VTK_POLY_VERTEX;
@@ -1153,6 +1178,9 @@ VTK_Recorder::setVTKType()
     vtktypes[ELE_TAG_YamamotoBiaxialHDR] = VTK_LINE;
     vtktypes[ELE_TAG_MVLEM] = VTK_POLY_VERTEX;
     vtktypes[ELE_TAG_SFI_MVLEM] = VTK_POLY_VERTEX;
+    vtktypes[ELE_TAG_MVLEM_3D] = VTK_POLY_VERTEX;
+    vtktypes[ELE_TAG_SFI_MVLEM_3D] = VTK_POLY_VERTEX;
+	vtktypes[ELE_TAG_E_SFI] = VTK_POLY_VERTEX;
     vtktypes[ELE_TAG_PFEMElement2DFIC] = VTK_TRIANGLE;
     vtktypes[ELE_TAG_TaylorHood2D] = VTK_QUADRATIC_TRIANGLE;
     vtktypes[ELE_TAG_PFEMElement2DQuasi] = VTK_TRIANGLE;
@@ -1164,6 +1192,9 @@ VTK_Recorder::setVTKType()
     vtktypes[ELE_TAG_ShellANDeS] = VTK_TRIANGLE;
     vtktypes[ELE_TAG_ShellDKGT] = VTK_TRIANGLE;
     vtktypes[ELE_TAG_ShellNLDKGT] = VTK_TRIANGLE;
+    vtktypes[ELE_TAG_InertiaTruss] = VTK_LINE;
+    vtktypes[ELE_TAG_ASDAbsorbingBoundary2D] = VTK_QUAD;
+    vtktypes[ELE_TAG_ASDAbsorbingBoundary3D] = VTK_HEXAHEDRON;
 }
 
 
@@ -1263,5 +1294,15 @@ VTK_Recorder::initialize()
 
   initDone = true;
 
+  return 0;
+}
+
+int VTK_Recorder::flush(void) {
+  if (thePVDFile.is_open() && thePVDFile.good()) {
+    thePVDFile.flush();
+  }
+  if (theVTUFile.is_open() && theVTUFile.good()) {
+    theVTUFile.flush();
+  }
   return 0;
 }

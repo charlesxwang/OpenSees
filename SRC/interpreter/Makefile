@@ -1,11 +1,13 @@
 
 include ../../Makefile.def
 
-OBJS  = DL_Interpreter.o OpenSeesCommands.o OpenSeesUniaxialMaterialCommands.o OpenSeesElementCommands.o OpenSeesTimeSeriesCommands.o OpenSeesPatternCommands.o OpenSeesSectionCommands.o OpenSeesOutputCommands.o OpenSeesCrdTransfCommands.o OpenSeesBeamIntegrationCommands.o OpenSeesNDMaterialCommands.o OpenSeesMiscCommands.o OpenSeesParameterCommands.o OpenSeesFrictionModelCommands.o OpenSeesReliabilityCommands.o
+OBJS  = DL_Interpreter.o OpenSeesCommands.o OpenSeesUniaxialMaterialCommands.o OpenSeesElementCommands.o OpenSeesTimeSeriesCommands.o OpenSeesPatternCommands.o OpenSeesSectionCommands.o OpenSeesOutputCommands.o OpenSeesCrdTransfCommands.o OpenSeesBeamIntegrationCommands.o OpenSeesNDMaterialCommands.o OpenSeesMiscCommands.o OpenSeesParameterCommands.o OpenSeesFrictionModelCommands.o OpenSeesReliabilityCommands.o OpenSeesNDTestCommands.o OpenSeesIGACommands.o 
+
+PythonOtherFiles = ../reliability/domain/functionEvaluator/PythonEvaluator.o
 
 TclOBJS =  tclMain.o TclInterpreter.o TclWrapper.o $(OBJS)
-PythonOBJS = pythonMain.o PythonModule.o PythonWrapper.o $(OBJS)
-PythonModuleOBJS = PythonModule.o PythonWrapper.o $(OBJS)
+PythonOBJS = pythonMain.o PythonModule.o PythonWrapper.o PythonStream.o $(OBJS)
+PythonModuleOBJS = PythonModule.o PythonWrapper.o PythonStream.o $(PythonOtherFiles) $(OBJS)
 
 # Compilation control
 
@@ -35,9 +37,9 @@ OBJSm = OpenSeesCommandsPython.o OpenSeesUniaxialMaterialCommands.o PythonModelB
 pythonmodule: $(PythonModuleOBJS)
 	$(RM) $(RMFLAGS) opensees.so;
 	$(LINKER) $(LINKFLAGS) -Wl,-rpath,\$$ORIGIN/lib -shared $(PythonModuleOBJS) \
+	$(INTERPRETER_LIBS_MPI_PARAMETERS) \
 	$(FE_LIBRARY) $(MACHINE_LINKLIBS) $(PYTHON_LIBRARY) \
 	$(MACHINE_NUMERICAL_LIBS) $(MACHINE_SPECIFIC_LIBS) $(PARALLEL_LIB) \
-	$(INTERPRETER_LIBS_MPI_PARAMETERS) \
 	 -o opensees.so
 
 

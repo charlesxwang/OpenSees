@@ -55,6 +55,7 @@ using std::nothrow;
 #include <NodeIter.h>
 #include <DOF_Group.h>
 #include <AnalysisModel.h>
+#include <elementAPI.h>
 #ifdef _PARALLEL_INTERPRETERS
 #include <mpi.h>
 #endif
@@ -94,7 +95,6 @@ PFEMLinSOE::PFEMLinSOE(PFEMSolver &the_Solver, int classTag)
      X(), B(), Mhat(), Mf(),
      dofType(), dofID()
 {
-
 }
 
 
@@ -109,6 +109,16 @@ PFEMLinSOE::~PFEMLinSOE()
     if(Qt != 0) cs_spfree(Qt);
 }
 
+int
+PFEMLinSOE::solve(void)
+{
+    int res = LinearSOE::solve();
+    if (res < 0) {
+        return res;
+    }
+
+    return 0;
+}
 
 int
 PFEMLinSOE::getNumEqn(void) const
@@ -164,9 +174,9 @@ PFEMLinSOE::addA(const Matrix &m, const ID &id, double fact)
     
     // check that m and id are of similar size
     if (idSize != m.noRows() && idSize != m.noCols()) {
-	opserr << "PFEMLinSOE::addA() ";
-	opserr << " - Matrix and ID not of similar sizes\n";
-	return -1;
+        opserr << "PFEMLinSOE::addA() ";
+        opserr << " - Matrix and ID not of similar sizes\n";
+        return -1;
     }
 
     int Ssize = M->n - Git->n;
@@ -361,16 +371,19 @@ PFEMLinSOE::setB(const Vector &v, double fact)
 void 
 PFEMLinSOE::zeroA(void)
 {
-    for(int i=0; i<M->nzmax; i++)
-	M->x[i] = 0.0;
-    for(int i=0; i<Gft->nzmax; i++)
-	Gft->x[i] = 0.0;
-    for(int i=0; i<Git->nzmax; i++)
-	Git->x[i] = 0.0;
-    for(int i=0; i<L->nzmax; i++)
-	L->x[i] = 0.0;
-    for(int i=0; i<Qt->nzmax; i++)
-	Qt->x[i] = 0.0;
+    for (int i = 0; i < M->nzmax; i++)
+        M->x[i] = 0.0;
+
+    for (int i = 0; i < Git->nzmax; i++)
+        Git->x[i] = 0.0;
+
+    // zero fluid part
+    for (int i = 0; i < Gft->nzmax; i++)
+        Gft->x[i] = 0.0;
+    for (int i = 0; i < L->nzmax; i++)
+        L->x[i] = 0.0;
+    for (int i = 0; i < Qt->nzmax; i++)
+        Qt->x[i] = 0.0;
 
     Mhat.Zero();
     Mf.Zero();
@@ -516,7 +529,7 @@ PFEMLinSOE::setDofIDs(int size,int& Ssize, int&Fsize, int& Isize,int& Psize,int&
         if(pnode != 0) {
             const ID& pid = pDOF->getID();
 
-	    if(thePC->isFreeSurf()) {
+	    if(thePC->isFreeSurf() && thePC->isFluid()) {
 		for(int i=0; i<pid.Size(); i++) {
                     if(pid(i) >= 0) {
                         dofType(pid(i)) = -1;    
@@ -628,7 +641,7 @@ PFEMLinSOE::setMatIDs(Graph& theGraph, int Ssize, int Fsize, int Isize, int Psiz
         int colid = dofID(col);         // column id
         if(coltype==4 || coltype<0) continue;      // don't need this column
 
-        // diagnol terms
+        // diagonal terms
         if(coltype == 0) {                      // structure momentum
             cs_entry(M1, colid, colid, 0.0);   
         } else if(coltype == 2) {               // interface momentum
@@ -637,7 +650,7 @@ PFEMLinSOE::setMatIDs(Graph& theGraph, int Ssize, int Fsize, int Isize, int Psiz
             cs_entry(L1, colid, colid, 0.0);    
         }
 
-        // off diagnol terms
+        // off diagonal terms
         const ID &theAdjacency = theVertex->getAdjacency();
         int idSize = theAdjacency.Size();
         for (int i=0; i<idSize; i++) {       // rows
@@ -703,4 +716,32 @@ PFEMLinSOE::setMatIDs(Graph& theGraph, int Ssize, int Fsize, int Isize, int Psiz
     // }
 
     return 0;
+}
+
+bool
+PFEMLinSOE::isFluidID(const ID &id) const
+{
+    bool fluid = true;
+    for (int i = 0; i < id.Size(); ++i) {
+        if (dofType(id(i))==0 || dofType(id(i))==2) {
+            fluid = false;
+            break;
+        }
+    }
+
+    return fluid;
+}
+
+void PFEMLinSOE::saveK(OPS_Stream& output) {
+    if (M == 0) return;
+    output << "sparse matrix <" << M->m << ", " << M->n << "> with "
+           << M->nzmax << " entries\n";
+
+    // save the matrix
+    for (int j = 0; j < M->n; ++j) {
+        for (int k = M->p[j]; k < M->p[j + 1]; ++k) {
+            output << "    " << M->i[k] << "    " << j << "    ("
+                   << M->x[k] << ")\n";
+        }
+    }
 }

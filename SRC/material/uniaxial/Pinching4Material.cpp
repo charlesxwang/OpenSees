@@ -45,6 +45,12 @@
 #include <string.h>
 #include <elementAPI.h>
 
+#include <Information.h>
+#include <Parameter.h>
+
+#include <Channel.h>
+
+
 void* OPS_Pinching4Material()
 {
     int numdata = OPS_GetNumRemainingInputArgs();
@@ -135,7 +141,7 @@ Pinching4Material::Pinching4Material(int tag,
   stress3p(f3p), strain3p(d3p), stress4p(f4p), strain4p(d4p),
   stress1n(f1n), strain1n(d1n), stress2n(f2n), strain2n(d2n),
   stress3n(f3n), strain3n(d3n), stress4n(f4n), strain4n(d4n),
-  envlpPosStress(6), envlpPosStrain(6), envlpNegStress(6), envlpNegStrain(6), tagMat(tag),
+  envlpPosStress(6), envlpPosStrain(6), envlpNegStress(6), envlpNegStrain(6),
   gammaK1(gk1), gammaK2(gk2), gammaK3(gk3), gammaK4(gk4), gammaKLimit(gklim),
   gammaD1(gd1), gammaD2(gd2), gammaD3(gd3), gammaD4(gd4), gammaDLimit(gdlim),
   gammaF1(gf1), gammaF2(gf2), gammaF3(gf3), gammaF4(gf4), gammaFLimit(gflim),
@@ -180,10 +186,6 @@ Pinching4Material::Pinching4Material(int tag,
 	energyCapacity = 0.0; kunload = 0.0; elasticStrainEnergy = 0.0;
 
 
-#ifdef _G3DEBUG
-	fg = new FileStream();
-	fg->setFile("PinchDamage.out", APPEND);
-#endif
 	// set envelope slopes
 	this->SetEnvelope();
 
@@ -204,7 +206,7 @@ Pinching4Material::Pinching4Material(int tag,
   UniaxialMaterial(tag, MAT_TAG_Pinching4),
   stress1p(f1p), strain1p(d1p), stress2p(f2p), strain2p(d2p),
   stress3p(f3p), strain3p(d3p), stress4p(f4p), strain4p(d4p),
-  envlpPosStress(6), envlpPosStrain(6), envlpNegStress(6), envlpNegStrain(6), tagMat(tag),
+  envlpPosStress(6), envlpPosStrain(6), envlpNegStress(6), envlpNegStrain(6),
   gammaK1(gk1), gammaK2(gk2), gammaK3(gk3), gammaK4(gk4), gammaKLimit(gklim),
   gammaD1(gd1), gammaD2(gd2), gammaD3(gd3), gammaD4(gd4), gammaDLimit(gdlim),
   gammaF1(gf1), gammaF2(gf2), gammaF3(gf3), gammaF4(gf4), gammaFLimit(gflim),
@@ -267,9 +269,7 @@ Pinching4Material::Pinching4Material():
 
 Pinching4Material::~Pinching4Material()
 {
-#ifdef _G3DEBUG
-	fg->close();
-#endif
+
 }
 
 int Pinching4Material::setTrialStrain(double strain, double CstrainRate)
@@ -402,9 +402,6 @@ int Pinching4Material::commitState(void)  {
 
 	CnCycle = TnCycle; // number of cycles of loading
 
-#ifdef _G3DEBUG
-	(*fg) << tagMat << "  " << CgammaF << "  " << CgammaK << "  " << CgammaD << endln;
-#endif
 	return 0;
 }
 
@@ -557,13 +554,254 @@ UniaxialMaterial* Pinching4Material::getCopy(void)
 
 int Pinching4Material::sendSelf(int commitTag, Channel &theChannel)
 {
-	return -1;
+
+    // Instantiate a Vector to store the relevant class attributes
+    static Vector data(119);
+
+    // Fill the Vector with class attributes.
+	int indx = 0;
+
+	data(indx++) = this->getTag();
+
+	// Backbone parameters
+	data(indx++) = stress1p;
+	data(indx++) = strain1p;
+	data(indx++) = stress2p;
+	data(indx++) = strain2p;
+	data(indx++) = stress3p;
+	data(indx++) = strain3p;
+	data(indx++) = stress4p;
+	data(indx++) = strain4p;
+	data(indx++) = stress1n;
+	data(indx++) = strain1n;
+	data(indx++) = stress2n;
+	data(indx++) = strain2n;
+	data(indx++) = stress3n;
+	data(indx++) = strain3n;
+	data(indx++) = stress4n;
+	data(indx++) = strain4n;
+
+	// Damage parameters
+	data(indx++) = gammaK1;
+	data(indx++) = gammaK2;
+	data(indx++) = gammaK3;
+	data(indx++) = gammaK4;
+	data(indx++) = gammaKLimit;
+	data(indx++) = gammaD1;
+	data(indx++) = gammaD2;
+	data(indx++) = gammaD3;
+	data(indx++) = gammaD4;
+	data(indx++) = gammaDLimit;
+	data(indx++) = gammaF1;
+	data(indx++) = gammaF2;
+	data(indx++) = gammaF3;
+	data(indx++) = gammaF4;
+	data(indx++) = gammaFLimit;
+	data(indx++) = gammaE;
+	data(indx++) = TnCycle;
+	data(indx++) = CnCycle;
+	data(indx++) = DmgCyc;
+
+	// unloading-reloading parameters
+	data(indx++) = rDispP;
+	data(indx++) = rForceP;
+	data(indx++) = uForceP;
+	data(indx++) = rDispN;
+	data(indx++) = rForceN;
+	data(indx++) = uForceN;
+
+	// Converged Material History parameters
+	data(indx++) = Cstate;
+	data(indx++) = Cstrain;
+	data(indx++) = Cstress;
+	data(indx++) = CstrainRate;
+	data(indx++) = lowCstateStrain;
+	data(indx++) = lowCstateStress;
+	data(indx++) = hghCstateStrain;
+	data(indx++) = hghCstateStress;
+	data(indx++) = CminStrainDmnd;
+	data(indx++) = CmaxStrainDmnd;
+	data(indx++) = Cenergy;
+	data(indx++) = CgammaK;
+	data(indx++) = CgammaD;
+	data(indx++) = CgammaF;
+	data(indx++) = gammaKUsed;
+	data(indx++) = gammaFUsed;
+
+	// strength and stiffness parameters
+	data(indx++) = kElasticPos;
+	data(indx++) = kElasticNeg;
+	data(indx++) = kElasticPosDamgd;
+	data(indx++) = kElasticNegDamgd;
+	data(indx++) = uMaxDamgd;
+	data(indx++) = uMinDamgd;
+
+	// energy parameters
+	data(indx++) = energyCapacity;
+	data(indx++) = kunload;
+	data(indx++) = elasticStrainEnergy;
+
+	// Vector-type variable contents
+	for (int k = 0; k<6; k++){
+	  data(indx++) = envlpPosStress[k];
+	  data(indx++) = envlpPosStrain[k];
+	  data(indx++) = envlpNegStress[k];
+	  data(indx++) = envlpNegStrain[k];          
+	  data(indx++) = envlpPosDamgdStress[k];
+	  data(indx++) = envlpNegDamgdStress[k];
+	}
+	for (int k = 0; k<4; k++){
+	  data(indx++) = state3Stress[k];
+	  data(indx++) = state3Strain[k];
+	  data(indx++) = state4Stress[k];
+	  data(indx++) = state4Strain[k];
+	}
+
+	// Send the data vector
+    int res = theChannel.sendVector(this->getDbTag(), commitTag, data);
+    if (res < 0) 
+    {
+        opserr << "Pinching4Material::sendSelf() - failed to send data\n";
+        return res;
+    }
+
+    return res;
 }
 
-int Pinching4Material::recvSelf(int commitTag, Channel &theChannel,
-							   FEM_ObjectBroker & theBroker)
+int Pinching4Material::recvSelf(
+    int commitTag, Channel &theChannel,
+	FEM_ObjectBroker & theBroker)
 {
-	return -1;
+
+	// Instantiate a Vector to store the relevant class attributes
+    static Vector data(119);
+
+    int res = theChannel.recvVector(this->getDbTag(), commitTag, data);
+    if (res < 0) 
+    {
+        opserr << "Pinching4Material::recvSelf() - failed to receive data\n";
+        return res;
+    }
+
+    // Assign the received values to the class attributes
+
+	int indx = 0;
+
+	this->setTag((int)data(indx++));
+	
+	// Backbone parameters
+	stress1p = data(indx++);
+	strain1p = data(indx++);
+	stress2p = data(indx++);
+	strain2p = data(indx++);
+	stress3p = data(indx++);
+	strain3p = data(indx++);
+	stress4p = data(indx++);
+	strain4p = data(indx++);
+	stress1n = data(indx++);
+	strain1n = data(indx++);
+	stress2n = data(indx++);
+	strain2n = data(indx++);
+	stress3n = data(indx++);
+	strain3n = data(indx++);
+	stress4n = data(indx++);
+	strain4n = data(indx++);
+
+	// Damage parameters
+	gammaK1 = data(indx++);
+	gammaK2 = data(indx++);
+	gammaK3 = data(indx++);
+	gammaK4 = data(indx++);
+	gammaKLimit = data(indx++);
+	gammaD1 = data(indx++);
+	gammaD2 = data(indx++);
+	gammaD3 = data(indx++);
+	gammaD4 = data(indx++);
+	gammaDLimit = data(indx++);
+	gammaF1 = data(indx++);
+	gammaF2 = data(indx++);
+	gammaF3 = data(indx++);
+	gammaF4 = data(indx++);
+	gammaFLimit = data(indx++);
+	gammaE = data(indx++);
+	TnCycle = data(indx++);
+	CnCycle = data(indx++);
+	DmgCyc = (int)data(indx++);
+
+	// unloading-reloading parameters
+	rDispP = data(indx++);
+	rForceP = data(indx++);
+	uForceP = data(indx++);
+	rDispN = data(indx++);
+	rForceN = data(indx++);
+	uForceN = data(indx++);
+
+	// Converged Material History parameters
+	Cstate = (int)data(indx++);
+	Cstrain = data(indx++);
+	Cstress = data(indx++);
+	CstrainRate = data(indx++);
+	lowCstateStrain = data(indx++);
+	lowCstateStress = data(indx++);
+	hghCstateStrain = data(indx++);
+	hghCstateStress = data(indx++);
+	CminStrainDmnd = data(indx++);
+	CmaxStrainDmnd = data(indx++);
+	Cenergy = data(indx++);
+	CgammaK = data(indx++);
+	CgammaD = data(indx++);
+	CgammaF = data(indx++);
+	gammaKUsed = data(indx++);
+	gammaFUsed = data(indx++);
+
+	// strength and stiffness parameters
+	kElasticPos = data(indx++);
+	kElasticNeg = data(indx++);
+	kElasticPosDamgd = data(indx++);
+	kElasticNegDamgd = data(indx++);
+	uMaxDamgd = data(indx++);
+	uMinDamgd = data(indx++);
+
+	// energy parameters
+	energyCapacity = data(indx++);
+	kunload = data(indx++);
+	elasticStrainEnergy = data(indx++);
+
+	// Vector-type variable contents
+	for (int k = 0; k<6; k++){
+	  envlpPosStress[k] = data(indx++);
+	  envlpPosStrain[k] = data(indx++);
+	  envlpNegStress[k] = data(indx++);
+	  envlpNegStrain[k] = data(indx++);
+	  envlpPosDamgdStress[k] = data(indx++);
+	  envlpNegDamgdStress[k] = data(indx++);
+	}
+	for (int k = 0; k<4; k++){
+	  state3Stress[k] = data(indx++);
+	  state3Strain[k] = data(indx++);
+	  state4Stress[k] = data(indx++);
+	  state4Strain[k] = data(indx++);
+	}
+
+	// Set trial variables to the last converged values
+	Tstress = Cstress;
+	Tstrain = Cstrain;
+	Ttangent = 0.0;
+	Tstate = Cstate;
+	dstrain = 0.0;
+	TstrainRate = CstrainRate;
+	lowTstateStrain = lowCstateStrain;
+	lowTstateStress = lowCstateStress;
+	hghTstateStrain = hghCstateStrain;
+	hghTstateStress = hghCstateStress;
+	TminStrainDmnd = CminStrainDmnd;
+	TmaxStrainDmnd = CmaxStrainDmnd;
+	Tenergy = Cenergy;
+	TgammaK = CgammaK;
+	TgammaD = CgammaD;
+	TgammaF = CgammaF;
+	
+    return res;
 }
 
 void Pinching4Material::Print(OPS_Stream &s, int flag)
@@ -1306,3 +1544,186 @@ void Pinching4Material::updateDmg(double strain, double dstrain)
 		}
 		
 	}
+
+int
+Pinching4Material::setParameter(const char** argv, int argc, Parameter& param)
+{
+	// Parameters for backbone control points
+	if (strcmp(argv[0], "f1p") == 0 || strcmp(argv[0], "stress1p") == 0) {
+		param.setValue(stress1p);
+		return param.addObject(1, this);
+	}
+	if (strcmp(argv[0], "d1p") == 0 || strcmp(argv[0], "strain1p") == 0) {
+		param.setValue(strain1p);
+		return param.addObject(2, this);
+	}
+	if (strcmp(argv[0], "f2p") == 0 || strcmp(argv[0], "stress2p") == 0) {
+		param.setValue(stress2p);
+		return param.addObject(3, this);
+	}
+	if (strcmp(argv[0], "d2p") == 0 || strcmp(argv[0], "strain2p") == 0) {
+		param.setValue(strain2p);
+		return param.addObject(4, this);
+	}
+	if (strcmp(argv[0], "f3p") == 0 || strcmp(argv[0], "stress3p") == 0) {
+		param.setValue(stress3p);
+		return param.addObject(5, this);
+	}
+	if (strcmp(argv[0], "d3p") == 0 || strcmp(argv[0], "strain3p") == 0) {
+		param.setValue(strain3p);
+		return param.addObject(6, this);
+	}
+	if (strcmp(argv[0], "f4p") == 0 || strcmp(argv[0], "stress4p") == 0) {
+		param.setValue(stress4p);
+		return param.addObject(7, this);
+	}
+	if (strcmp(argv[0], "d4p") == 0 || strcmp(argv[0], "strain4p") == 0) {
+		param.setValue(strain4p);
+		return param.addObject(8, this);
+	}
+	if (strcmp(argv[0], "f1n") == 0 || strcmp(argv[0], "stress1n") == 0) {
+		param.setValue(stress1n);
+		return param.addObject(9, this);
+	}
+	if (strcmp(argv[0], "d1n") == 0 || strcmp(argv[0], "strain1n") == 0) {
+		param.setValue(strain1n);
+		return param.addObject(10, this);
+	}
+	if (strcmp(argv[0], "f2n") == 0 || strcmp(argv[0], "stress2n") == 0) {
+		param.setValue(stress2n);
+		return param.addObject(11, this);
+	}
+	if (strcmp(argv[0], "d2n") == 0 || strcmp(argv[0], "strain2n") == 0) {
+		param.setValue(strain2n);
+		return param.addObject(12, this);
+	}
+	if (strcmp(argv[0], "f3n") == 0 || strcmp(argv[0], "stress3n") == 0) {
+		param.setValue(stress3n);
+		return param.addObject(13, this);
+	}
+	if (strcmp(argv[0], "d3n") == 0 || strcmp(argv[0], "strain3n") == 0) {
+		param.setValue(strain3n);
+		return param.addObject(14, this);
+	}
+	if (strcmp(argv[0], "f4n") == 0 || strcmp(argv[0], "stress4n") == 0) {
+		param.setValue(stress4n);
+		return param.addObject(15, this);
+	}
+	if (strcmp(argv[0], "d4n") == 0 || strcmp(argv[0], "strain4n") == 0) {
+		param.setValue(strain4n);
+		return param.addObject(16, this);
+	}
+
+	// Parameters for hysteretic rules
+	if (strcmp(argv[0], "rDispP") == 0) {
+		param.setValue(rDispP);
+		return param.addObject(17, this);
+	}
+	if (strcmp(argv[0], "rForceP") == 0) {
+		param.setValue(rForceP);
+		return param.addObject(18, this);
+	}
+	if (strcmp(argv[0], "uForceP") == 0) {
+		param.setValue(uForceP);
+		return param.addObject(19, this);
+	}
+	if (strcmp(argv[0], "rDispN") == 0) {
+		param.setValue(rDispN);
+		return param.addObject(20, this);
+	}
+	if (strcmp(argv[0], "rForceN") == 0) {
+		param.setValue(rForceN);
+		return param.addObject(21, this);
+	}
+	if (strcmp(argv[0], "uForceN") == 0) {
+		param.setValue(uForceN);
+		return param.addObject(22, this);
+	}
+
+	return -1;
+}
+
+
+
+int
+Pinching4Material::updateParameter(int parameterID, Information& info)
+{
+	switch (parameterID) {
+	case -1:
+		return -1;
+	case 1:
+		this->stress1p = info.theDouble;
+		break;
+	case 2:
+		this->strain1p = info.theDouble;
+		break;
+	case 3:
+		this->stress2p = info.theDouble;
+		break;
+	case 4:
+		this->strain2p = info.theDouble;
+		break;
+	case 5:
+		this->stress3p = info.theDouble;
+		break;
+	case 6:
+		this->strain3p = info.theDouble;
+		break;
+	case 7:
+		this->stress4p = info.theDouble;
+		break;
+	case 8:
+		this->strain4p = info.theDouble;
+		break;
+	case 9:
+		this->stress1n = info.theDouble;
+		break;
+	case 10:
+		this->strain1n = info.theDouble;
+		break;
+	case 11:
+		this->stress2n = info.theDouble;
+		break;
+	case 12:
+		this->strain2n = info.theDouble;
+		break;
+	case 13:
+		this->stress3n = info.theDouble;
+		break;
+	case 14:
+		this->strain3n = info.theDouble;
+		break;
+	case 15:
+		this->stress4n = info.theDouble;
+		break;
+	case 16:
+		this->strain4n = info.theDouble;
+		break;
+	case 17:
+		this->rDispP = info.theDouble;
+		break;
+	case 18:
+		this->rForceP = info.theDouble;
+		break;
+	case 19:
+		this->uForceP = info.theDouble;
+		break;
+	case 20:
+		this->rDispN = info.theDouble;
+		break;
+	case 21:
+		this->rForceN = info.theDouble;
+		break;
+	case 22:
+		this->uForceN = info.theDouble;
+		break;
+	default:
+		return -1;
+	}
+
+	// Changed a parameter: we need to update the envelope?
+	this->SetEnvelope();
+
+
+	return 0;
+}

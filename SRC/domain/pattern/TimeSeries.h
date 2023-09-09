@@ -54,6 +54,7 @@ class TimeSeries : public TaggedObject, public MovableObject
     // pure virtual functions
     virtual double getFactor (double pseudoTime) = 0;
     virtual double getDuration () = 0;
+    virtual double getStartTime() { return 0.0; }
     virtual double getPeakFactor () = 0;
 
     virtual double getTimeIncr (double pseudoTime) = 0;
@@ -68,9 +69,7 @@ class TimeSeries : public TaggedObject, public MovableObject
     // AddingSensitivity:BEGIN //////////////////////////////////////////
     virtual double getFactorSensitivity(double pseudoTime) {return 0.0;}
     virtual int setParameter(const char **argv, int argc, Parameter &param) {return 0;}
-#if !_DLL
     virtual int updateParameter(int parameterID, Information &info) {return 0;}
-#endif
     virtual int activateParameter(int parameterID) {return 0;}
     // AddingSensitivity:BEGIN //////////////////////////////////////////
 

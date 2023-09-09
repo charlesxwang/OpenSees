@@ -26,7 +26,7 @@
 #include <Vector.h>
 #include <Channel.h>
 #include <EquiSolnAlgo.h>
-#include <PFEMLinSOE.h>
+#include "sparseGEN/PFEMLinSOE.h"
 #include <typeinfo>
 #include <cmath>
 #include <elementAPI.h>
@@ -183,28 +183,28 @@ int CTestPFEM::test(void)
     // copy norms from host to all processors
     int myid;
     MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-    double norms[6];
+    double allnorms[6];
     if(myid == 0) {
-	norms[0] = normv;
-	norms[1] = normp;
-	norms[2] = normpi;
-	norms[3] = normresv;
-	norms[4] = normresp;
-	norms[5] = normrespi;
+	allnorms[0] = normv;
+	allnorms[1] = normp;
+	allnorms[2] = normpi;
+	allnorms[3] = normresv;
+	allnorms[4] = normresp;
+	allnorms[5] = normrespi;
     }
 
-    if(MPI_Bcast(&norms,6,MPI_DOUBLE,0,MPI_COMM_WORLD) != MPI_SUCCESS) {
+    if(MPI_Bcast(&allnorms,6,MPI_DOUBLE,0,MPI_COMM_WORLD) != MPI_SUCCESS) {
 	opserr<<"WARNING: failed to copy norms to all processors\n";
 	return -1;
     }
 
     if(myid != 0) {
-	normv = norms[0];
-	normp = norms[1];
-	normpi = norms[2];
-	normresv = norms[3];
-	normresp = norms[4];
-	normrespi = norms[5];
+	normv = allnorms[0];
+	normp = allnorms[1];
+	normpi = allnorms[2];
+	normresv = allnorms[3];
+	normresp = allnorms[4];
+	normrespi = allnorms[5];
     }
 
     // no print except host
@@ -282,7 +282,7 @@ int CTestPFEM::test(void)
                 opserr << "), incr(" << numIncr<<")\n";
             }
         }
-        
+
         // return the number of times test has been called
         return currentIter;
     }
@@ -302,7 +302,7 @@ int CTestPFEM::test(void)
     }
     
     // algo failed to converged after specified number of iterations - return FAILURE -2
-    else if(currentIter >= maxNumIter || numIncr > maxIncr || badnorm) { // failes to converge
+    else if(currentIter >= maxNumIter || numIncr > maxIncr || badnorm) { // fails to converge
         opserr << "WARNING: CTestPFEM - failed to converge \n";
         opserr << "after: " << currentIter << " iterations:";
         opserr << " dV(" << normv << "," << normvrel;
@@ -317,10 +317,8 @@ int CTestPFEM::test(void)
     } 
     
     // algorithm not yet converged - increment counter and return -1
-    else {
-        currentIter++;    
-        return -1;
-    }
+    currentIter++;
+    return -1;
 }
 
 

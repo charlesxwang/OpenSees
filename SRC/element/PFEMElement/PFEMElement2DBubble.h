@@ -43,7 +43,7 @@ public:
     PFEMElement2DBubble();
     PFEMElement2DBubble(int tag, int nd1, int nd2, int nd3,
                         double r, double m, double b1, double b2,
-                        double thk=1.0, double ka=-1);
+                        double thk=1.0, double ka=-1,double minj=1e-16);
 
     ~PFEMElement2DBubble();
 
@@ -111,15 +111,19 @@ private:
     ID numDOFs;
     double thickness;
     double kappa;
+    double minJ;
     int parameterID;
 
     static Matrix K;
     static Vector P;
     static Matrix C;
+    Matrix M, D;
+    Vector F, Fp;
 
     void setJ();
     void setdJ();
     static void setC();
+    int updateMatrix();
 
     // responses
     double getM() const;

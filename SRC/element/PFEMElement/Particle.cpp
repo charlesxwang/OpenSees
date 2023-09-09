@@ -18,7 +18,6 @@
 **                                                                    **
 ** ****************************************************************** */
 
-
 // $Revision: 1.0 $
 // $Date: 2016-1-27  $
 
@@ -29,10 +28,17 @@
 
 #include "Particle.h"
 
-Particle::Particle()
-        : coord(), coordn(), velocity(), accel(), pressure(0), pdot(0), gtag(0),
-          updated(false), dt(0.0), fixed(false) {
-}
+size_t Particle::curr_tag = 1;
 
-Particle::~Particle() {
-}
+Particle::Particle()
+    : coord(),
+      velocity(),
+      accel(),
+      pressure(0),
+      pdot(0),
+      gtag(0),
+      updated(false),
+      dt(0.0),
+      tag(curr_tag++) {}
+
+Particle::~Particle() {}

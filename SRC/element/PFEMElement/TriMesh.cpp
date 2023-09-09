@@ -353,7 +353,7 @@ TriMesh::mesh() {
         // create node
         Node *node = newNode(nodecounter++, crds);
         if (node == 0) {
-            opserr << "WARING: failed to create node\n";
+            opserr << "WARNING: failed to create node\n";
             return -1;
         }
         if (domain->addNode(node) == false) {
@@ -434,7 +434,7 @@ TriMesh::mesh() {
     }
     this->setEleNodes(elenodes);
 
-    // create elemnts
+    // create elements
     if (this->newElements(elenodes) < 0) {
         opserr << "WARNING: failed to create elements\n";
         return -1;
@@ -443,6 +443,18 @@ TriMesh::mesh() {
     return 0;
 }
 
+
+// Every node may be in multiple mesh
+// Do triangulation of all nodes
+// For each triangle:
+//     If 3 nodes share 1 mesh, 
+//        use that mesh for the triangle
+//     If 3 nodes share multiple mesh, 
+//        use the mesh with eleArgs and lowest id
+//     If 3 nodes are in different mesh, 
+//        use the mesh with lowest id
+//     If the selected mesh id >= 0, skip triangle
+//     If the selected mesh has no eleArgs, skip triangle
 int
 TriMesh::remesh(double alpha) {
     if (OPS_GetNDM() != 2) {
